@@ -1,11 +1,11 @@
 pipeline {
     agent any 
     tools {
-        jdk 'jdk'
-        nodejs 'nodejs'
+        jdk 'jdk'                    // CHANGE: Make sure this matches your JDK name in Jenkins Global Tools
+        nodejs 'nodejs'              // CHANGE: Make sure this matches your Node.js name in Jenkins Global Tools
     }
     environment  {
-        SCANNER_HOME=tool 'sonar-scanner'
+        SCANNER_HOME=tool 'sonar-scanner'  // CHANGE: Make sure this matches your SonarQube Scanner name in Jenkins Global Tools
     }
     stages {
         stage('Cleaning Workspace') {
@@ -15,15 +15,17 @@ pipeline {
         }
         stage('Checkout from Git') {
             steps {
-                git branch: 'master', url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
+                // CHANGE: Replace with YOUR GitHub repository URL
+                git branch: 'main', url: 'https://github.com/pothagoniharish/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
             }
         }
         stage('Sonarqube Analysis') {
             steps {
-                dir('Tetris-V1') {
-                    withSonarQubeEnv('sonar-server') {
+                dir('Tetris-V1') {       // CHANGE: Make sure this folder exists in your repo
+                    withSonarQubeEnv('sonar-server') {  // CHANGE: Make sure this matches your SonarQube server name in Jenkins
                         sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=TetrisVersion1.0 \
                         -Dsonar.projectKey=TetrisVersion1.0 '''
+                        // CHANGE: You can change project name and key to match your project
                     }
                 }
             }
@@ -32,12 +34,13 @@ pipeline {
             steps {
                 script {
                     waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token' 
+                    // CHANGE: Make sure 'sonar-token' matches your SonarQube credential ID in Jenkins
                 }
             }
         }
         stage('Installing Dependencies') {
             steps {
-                dir('Tetris-V1') {
+                dir('Tetris-V1') {       // CHANGE: Make sure this folder contains package.json
                     sh 'npm install'
                 }
             }
@@ -46,6 +49,7 @@ pipeline {
             steps {
                 dir('Tetris-V1') {
                     dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
+                    // CHANGE: Make sure 'DP-Check' matches your OWASP Dependency Check installation name in Jenkins
                     dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                 }
             }
@@ -53,18 +57,20 @@ pipeline {
         stage('Trivy File Scan') {
             steps {
                 dir('Tetris-V1') {
-                    sh 'trivy fs . > trivyfs.txt'
+                    sh 'trivy fs . > trivyfs.txt'  // CHANGE: Make sure Trivy is installed on your Jenkins agent
                 }
             }
         }
         stage("Docker Image Build") {
             steps {
                 script {
-                    dir('Tetris-V1') {
+                    dir('Tetris-V1') {    // CHANGE: Make sure this folder contains Dockerfile
                         withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {   
+                        // CHANGE: Make sure 'docker' matches your Docker Hub credential ID in Jenkins
+                        // CHANGE: Make sure 'docker' matches your Docker tool name in Jenkins Global Tools
                             sh 'docker system prune -f'
                             sh 'docker container prune -f'
-                            sh 'docker build -t tetrisv1 .'
+                            sh 'docker build -t tetrisv1 .'  // CHANGE: You can change 'tetrisv1' to your preferred image name
                         }
                     }
                 }
@@ -74,41 +80,49 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {   
-                        sh 'docker tag tetrisv1 avian19/tetrisv1:${BUILD_NUMBER}'
-                        sh 'docker push avian19/tetrisv1:${BUILD_NUMBER}'
+                        // CHANGE: Replace 'avian19' with YOUR Docker Hub username
+                        sh 'docker tag tetrisv1 harish705/tetrisv1:${BUILD_NUMBER}'
+                        sh 'docker push harish705/tetrisv1:${BUILD_NUMBER}'
                     }
                 }
             }
         }
         stage("TRIVY Image Scan") {
             steps {
-                sh 'trivy image avian19/tetrisv1:${BUILD_NUMBER} > trivyimage.txt' 
+                // CHANGE: Replace 'avian19' with YOUR Docker Hub username
+                sh 'trivy image harish705/tetrisv1:${BUILD_NUMBER} > trivyimage.txt' 
             }
         }
         stage('Checkout Code') {
             steps {
-                git branch: 'master', url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
+                // CHANGE: Replace with YOUR GitHub repository URL (same as first checkout)
+                git branch: 'main', url: 'https://github.com/pothagoniharish/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
             }
         }
         stage('Update Deployment file') {
             environment {
+                // CHANGE: Replace with YOUR repository name
                 GIT_REPO_NAME = "End-to-End-Kubernetes-DevSecOps-Tetris-Project"
-                GIT_USER_NAME = "AmanPathak-DevOps"
+                // CHANGE: Replace with YOUR GitHub username
+                GIT_USER_NAME = "pothagoniharish"
             }
             steps {
-                dir('Manifest-file') {
+                dir('Manifest-file') {    // CHANGE: Make sure this folder exists in your repo with deployment-service.yml
                     withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
+                    // CHANGE: Make sure 'github' matches your GitHub token credential ID in Jenkins
                         sh '''
-                            git config user.email "aman07pathak@gmail.com"
-                            git config user.name "AmanPathak-DevOps"
+                            # CHANGE: Replace with YOUR email and GitHub username
+                            git config user.email "pothagoniharishgoud@gmail.com"
+                            git config user.name "pothagoniharish"
                             BUILD_NUMBER=${BUILD_NUMBER}
                             echo $BUILD_NUMBER
                             imageTag=$(grep -oP '(?<=tetrisv1:)[^ ]+' deployment-service.yml)
                             echo $imageTag
                             sed -i "s/tetrisv1:${imageTag}/tetrisv1:${BUILD_NUMBER}/" deployment-service.yml
+                            # CHANGE: Make sure deployment-service.yml exists and contains tetrisv1 image reference
                             git add deployment-service.yml
                             git commit -m "Update deployment Image to version \${BUILD_NUMBER}"
-                            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:master
+                            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
                         '''
                     }
                 }
